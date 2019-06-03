@@ -2,10 +2,11 @@ pragma solidity ^0.4.24;
 
 contract ContinuousOrganisation {
 
-    /* The parameters of the Continuous Organisation. All are multiplied by 1000 */
-    uint slope = 1000; // parametrize the buying linear curve
-    uint alpha = 100; // fraction put into selling reserves when investors buy
-    uint beta = 300; // fraction put into selling reserves when the CO has revenues
+    /* The parameters of the Continuous Organisation. All are multiplied by base */
+    uint base = 10000;
+    uint slope = base; // parametrize the buying linear curve
+    uint alpha = base/10; // fraction put into selling reserves when investors buy
+    uint beta = base/3; // fraction put into selling reserves when the CO has revenues
 
     /* The tokens of the Continuous Organisation */
     uint nTokens = 0;
@@ -21,14 +22,13 @@ contract ContinuousOrganisation {
     event UpdateTokens(uint tokens, uint sellReserve);
 
 
-    /* This is the constructor. Solidity does not implement float number so we have to multiply constants by 1000 and rounding them before creating the smart contract.
+    /* This is the constructor. Solidity does not implement float number so we have to multiply constants by base and rounding them before creating the smart contract.
     */
-    constructor(uint paramA, uint paramAlpha, uint paramBeta) public {
-        require(paramAlpha < 1001 && paramBeta < 1001);
+    constructor(uint _base) public {
         owner = msg.sender;
-        slope = paramA;
-        alpha = paramAlpha;
-        beta = paramBeta;
+        slope = _base;
+        alpha = _base/10;
+        beta = _base/3;
     }
 
     /* Getters and setters */
@@ -59,6 +59,12 @@ contract ContinuousOrganisation {
         returns (uint y) {
         y = nTokens;
     }
+    function getPriceForQuarter()
+        public
+        view
+        returns (uint y) {
+        y = (sellReserve / (2 * nTokens * slope / alpha));
+    }
 
 
     /* Babylonian method for square root. See: https://ethereum.stackexchange.com/a/2913 */
@@ -81,13 +87,13 @@ contract ContinuousOrganisation {
 
         // create tokens
         uint invest = msg.value;
-        uint tokens = sqrt(2*invest*1000/slope + nTokens*nTokens) - nTokens;
+        uint tokens = sqrt(2*invest*base/slope + nTokens*nTokens) - nTokens + 1;
         balances[msg.sender] += tokens;
         nTokens += tokens;
 
         // redistribute tokens
         sellReserve += alpha*invest;
-        owner.transfer((1000-alpha)/1000*invest);
+        owner.transfer((base-alpha)/base*invest);
 
         emit UpdateTokens(nTokens, sellReserve);
     }
@@ -100,7 +106,7 @@ contract ContinuousOrganisation {
         balances[msg.sender] -= tokens;
         uint withdraw = sellReserve*tokens/nTokens/nTokens*(2*nTokens - tokens);
         sellReserve -= withdraw;
-        withdraw /= 1000;
+        withdraw /= base;
         msg.sender.transfer(withdraw);
 
         emit UpdateTokens(nTokens, sellReserve);
@@ -114,13 +120,13 @@ contract ContinuousOrganisation {
         require(msg.value > 0);
         uint revenue = msg.value;
         // create tokens
-        uint tokens = sqrt(2*revenue*1000/slope + nTokens*nTokens) - nTokens;
+        uint tokens = sqrt(2*revenue*base/slope + nTokens*nTokens) - nTokens;
         balances[owner] += tokens;
         nTokens += tokens;
 
         // redistribute tokens
         sellReserve += beta*revenue;
-        owner.transfer((1-beta)*revenue/1000);
+        owner.transfer((1-beta)*revenue/base);
 
         emit UpdateTokens(nTokens, sellReserve);
     }
